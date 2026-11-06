@@ -3,11 +3,12 @@
 class DFAMEngine {
   constructor(sr) {
     this.sr = sr;
-    // Page 0 controls (defaults are the values saved in the patch).
+    // Page 0 controls. Defaults are the values saved in the patch, except both Frequency
+    // knobs: the patch's 0.5 is 27.5 Hz, which laptop and phone speakers can't reproduce.
     this.p = {
-      osc1EgAmt: 0, osc1PitchMod: 1, osc1Freq: 0.5, osc1Square: 0, osc1Level: 1,
+      osc1EgAmt: 0, osc1PitchMod: 1, osc1Freq: 0.65, osc1Square: 0, osc1Level: 1,
       vcoDecay: 0.5,
-      osc2EgAmt: 0, osc2PitchMod: 1, osc2Freq: 0.5, osc2Square: 0, osc2Level: 0,
+      osc2EgAmt: 0, osc2PitchMod: 1, osc2Freq: 0.65, osc2Square: 0, osc2Level: 0,
       fmAmt: 0, noiseLevel: 0, osc2Sync: 0,
       vcfEgAmt: 0, vcfHP: 0, vcfCutoff: 1, vcfRes: 0, noiseVcfMod: 0, vcfDecay: 0.65,
       volume: 1, slowAttack: 0, vcaDecay: 0.65,

@@ -32,6 +32,8 @@ button.t[aria-pressed="true"] .led { background: var(--amber); box-shadow: 0 0 8
 button.t.power { background: var(--amber); color: #1d1408; border-color: var(--amber); }
 button.t.power.on { background: var(--panel-2); color: var(--ink); border-color: var(--rule); }
 kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
+.meter { width: 10px; height: 38px; border-radius: 3px; background: var(--knob); border: 1px solid var(--rule); position: relative; overflow: hidden; }
+.meter span { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--lvl, 0) * 100%); background: var(--amber); }
 .modules { display: flex; flex-wrap: wrap; gap: 14px; }
 .mod { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px 14px; display: grid; gap: 10px; flex: 1 1 auto; }
 .mod h2 { margin: 0; font-size: .8rem; font-weight: 600; letter-spacing: .24em; color: var(--ink-dim); text-transform: uppercase; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
@@ -82,6 +84,7 @@ kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
     <h1>DFAM<small>ZOIA patch 024 · Web Audio port</small></h1>
     <div class="transport">
       <button class="t power" id="power" type="button">Start audio</button>
+      <div class="meter" id="meter" role="img" aria-label="Output level"><span></span></div>
       <button class="t" id="run" type="button" aria-pressed="false"><span class="led"></span>Run <kbd>space</kbd></button>
       <button class="t" id="trig" type="button">Trigger <kbd>T</kbd></button>
       <button class="t" id="adv" type="button">Advance <kbd>A</kbd></button>
@@ -140,7 +143,7 @@ kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
   <section class="notes">
     <h2>About this port</h2>
     <p>The DSP runs per sample in an AudioWorklet and follows the patch's 132 modules and 169 cables: two oscillators with triangle/square switches, pitch envelopes scaled by velocity, linear FM from VCO 1 into VCO 2, a bit-XOR "sync", white noise, a state-variable filter with envelope and noise modulation, and a VCA. Knob defaults are the values saved in the patch.</p>
-    <p>Pitch follows ZOIA's scale: 0 is 27.5 Hz and each 0.1 of CV is one octave, so a centred Frequency knob sits at 27.5 Hz. The Breaks row is the patch's 16-step restart sequencer; Modifiers 1–4 light steps 6, 10, 4 and 13. MIDI clock, MIDI note triggering, the external CV jack and the display pixels are not ported.</p>
+    <p>Pitch follows ZOIA's scale: 0 is 27.5 Hz and each 0.1 of CV is one octave, so a centred Frequency knob sits at 27.5 Hz. The patch saves both Frequency knobs at centre; this page starts them a little higher (about 200 Hz) so small speakers can play them. The Breaks row is the patch's 16-step restart sequencer; Modifiers 1–4 light steps 6, 10, 4 and 13. MIDI clock, MIDI note triggering, the external CV jack and the display pixels are not ported.</p>
     <p class="status" id="status">Audio is off. Press Start audio, then Run.</p>
   </section>
 </div>
@@ -154,7 +157,17 @@ kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
   const eng = new E(48000); // mirror of the defaults, used for UI state only
   const state = { p: { ...eng.p }, pitch: eng.pitch.slice(), vel: eng.vel.slice(), breaks: eng.breaks.slice(), modifiers: eng.modifiers.slice(), running: 0 };
   let send = () => {};
-  let ctx = null;
+  let ctx = null, analyser = null;
+  const meterBuf = new Float32Array(1024);
+  function meterLoop() {
+    const m = document.getElementById('meter');
+    const tick = () => {
+      if (analyser) { analyser.getFloatTimeDomainData(meterBuf); let pk = 0; for (const x of meterBuf) pk = Math.max(pk, Math.abs(x));
+        m.style.setProperty('--lvl', Math.min(1, pk).toFixed(3)); if (ctx && ctx.state !== 'running') m.style.setProperty('--lvl', 0); }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
 
   const fmtHz = hz => hz >= 1000 ? (hz / 1000).toFixed(2) + ' kHz' : hz >= 10 ? hz.toFixed(1) + ' Hz' : hz.toFixed(2) + ' Hz';
   const fmtT = s => s >= 1 ? s.toFixed(2) + ' s' : Math.round(s * 1000) + ' ms';
@@ -288,7 +301,16 @@ kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
   }
   async function start() {
     if (ctx) { if (ctx.state === 'running') { await ctx.suspend(); power.textContent = 'Resume audio'; power.classList.remove('on'); status.textContent = 'Audio paused.'; } else { await ctx.resume(); power.textContent = 'Pause audio'; power.classList.add('on'); status.textContent = 'Audio running at ' + ctx.sampleRate + ' Hz.'; } return; }
+    // iOS: let Web Audio play even when the ring/silent switch is on (Safari 17+).
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
     ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Resume inside the click itself; some browsers refuse a resume after an await.
+    ctx.resume();
+    // Older iOS: a silent buffer started in the gesture unlocks output.
+    try { const sb = ctx.createBufferSource(); sb.buffer = ctx.createBuffer(1, 1, ctx.sampleRate); sb.connect(ctx.destination); sb.start(0); } catch (e) {}
+    const master = ctx.createGain();
+    analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    master.connect(analyser); master.connect(ctx.destination);
     let mode = 'AudioWorklet';
     try {
       const src = DFAMEngine.toString() + `
@@ -303,19 +325,20 @@ kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
       const node = new AudioWorkletNode(ctx, 'dfam', { numberOfInputs: 0, outputChannelCount: [2] });
       node.port.onmessage = m => onEvents(m.data);
       send = msg => node.port.postMessage(msg);
-      node.connect(ctx.destination);
+      node.connect(master);
     } catch (err) {
       mode = 'ScriptProcessor';
       const e = new DFAMEngine(ctx.sampleRate);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
       sp.onaudioprocess = ev => { const ob = ev.outputBuffer; e.process(ob.getChannelData(0), ob.getChannelData(1), ob.length); if (e.events.length) { const evs = e.events; e.events = []; onEvents(evs); } };
       send = msg => e.set(msg);
-      sp.connect(ctx.destination);
+      sp.connect(master);
     }
     pushAll();
     await ctx.resume();
     power.textContent = 'Pause audio'; power.classList.add('on');
-    status.textContent = 'Audio running at ' + ctx.sampleRate + ' Hz (' + mode + ').';
+    status.textContent = 'Audio running at ' + ctx.sampleRate + ' Hz (' + mode + '). If the meter moves but you hear nothing, check your volume, and on iPhone the silent switch.';
+    meterLoop();
   }
   power.addEventListener('click', start);
 
