@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZOIA DFAM Port</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one instrument faceplate; module strips wrap into rows, sequencer runs full width beneath. */
+:root {
+  --panel: #1d2430;      /* anodised slate faceplate */
+  --panel-2: #262f3d;    /* module wells */
+  --rule: #3a4556;
+  --ink: #e9e4d8;        /* silkscreen */
+  --ink-dim: #9aa3b2;
+  --amber: #f2a541;      /* LEDs, active state */
+  --amber-dim: #5a4225;
+  --knob: #10141b;
+  --cap: #c9ccd2;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+body { background: var(--panel); color: var(--ink); font-family: var(--display); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; border-bottom: 1px solid var(--rule); padding-bottom: 14px; }
+h1 { margin: 0; font-size: 2.1rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; line-height: 1; }
+h1 small { display: block; font-size: .8rem; letter-spacing: .2em; color: var(--ink-dim); font-weight: 500; margin-top: 6px; }
+.transport { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button.t { font-family: var(--display); font-size: .95rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: var(--panel-2); border: 1px solid var(--rule); border-radius: 4px; padding: 9px 14px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+button.t:hover { border-color: var(--ink-dim); }
+button.t:focus-visible, .knob:focus-visible, .tog:focus-visible, .stepcell:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+button.t .led { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-dim); }
+button.t[aria-pressed="true"] .led { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+button.t.power { background: var(--amber); color: #1d1408; border-color: var(--amber); }
+button.t.power.on { background: var(--panel-2); color: var(--ink); border-color: var(--rule); }
+kbd { font-family: var(--mono); font-size: .7rem; color: var(--ink-dim); }
+.modules { display: flex; flex-wrap: wrap; gap: 14px; }
+.mod { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px 14px; display: grid; gap: 10px; flex: 1 1 auto; }
+.mod h2 { margin: 0; font-size: .8rem; font-weight: 600; letter-spacing: .24em; color: var(--ink-dim); text-transform: uppercase; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+.row { display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: flex-start; }
+.ctl { display: grid; justify-items: center; gap: 5px; width: 66px; }
+.ctl label, .ctl .lab { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; text-align: center; line-height: 1.1; min-height: 2.2em; display: flex; align-items: flex-end; }
+.val { font-family: var(--mono); font-size: .66rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.knob { width: 48px; height: 48px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #2b3340, var(--knob) 70%); border: 2px solid #0a0d12; box-shadow: 0 2px 0 #0a0d12, inset 0 1px 0 #3a4352; position: relative; cursor: ns-resize; touch-action: none; }
+.knob::after { content: ""; position: absolute; left: 50%; top: 4px; width: 3px; height: 14px; margin-left: -1.5px; border-radius: 2px; background: var(--cap); transform-origin: 50% 20px; transform: rotate(var(--a, 0deg)); }
+.knob.small { width: 38px; height: 38px; }
+.knob.small::after { height: 11px; transform-origin: 50% 15px; }
+.tog { width: 34px; height: 46px; border-radius: 4px; border: 1px solid var(--rule); background: var(--knob); position: relative; cursor: pointer; padding: 0; }
+.tog::after { content: ""; position: absolute; left: 5px; right: 5px; height: 18px; border-radius: 3px; background: var(--cap); top: 22px; transition: top .08s; }
+.tog[aria-pressed="true"]::after { top: 4px; }
+.tog .led { position: absolute; bottom: -11px; left: 50%; margin-left: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--amber-dim); }
+.tog[aria-pressed="true"] .led { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.seq { background: var(--panel-2); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px 16px; display: grid; gap: 12px; }
+.seq h2, .breaks h2 { margin: 0; font-size: .8rem; font-weight: 600; letter-spacing: .24em; color: var(--ink-dim); text-transform: uppercase; }
+.steps { display: grid; grid-template-columns: 70px repeat(8, minmax(0, 1fr)); gap: 10px 6px; align-items: center; justify-items: center; }
+.steps .rl { justify-self: start; font-size: .72rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+.steps .num { font-family: var(--mono); font-size: .72rem; color: var(--ink-dim); }
+.stepled { width: 12px; height: 12px; border-radius: 50%; background: var(--amber-dim); }
+.stepled.on { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.breaks { display: grid; gap: 10px; }
+.bgrid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; }
+.stepcell { height: 30px; border-radius: 3px; border: 1px solid var(--rule); background: var(--knob); color: var(--ink-dim); font-family: var(--mono); font-size: .62rem; display: grid; place-items: center; cursor: pointer; padding: 0; position: relative; }
+.stepcell.set { background: var(--amber-dim); color: var(--ink); border-color: var(--amber); }
+.stepcell.mod::before { content: "M" attr(data-m); position: absolute; top: -14px; font-size: .6rem; color: var(--amber); }
+.stepcell.now { box-shadow: inset 0 -3px 0 var(--amber); color: var(--ink); }
+.mods { display: flex; flex-wrap: wrap; gap: 10px; }
+.notes { color: var(--ink-dim); font-family: var(--display); font-size: 1rem; line-height: 1.45; max-width: 72ch; display: grid; gap: 6px; }
+.notes h2 { margin: 0; font-size: .8rem; letter-spacing: .24em; text-transform: uppercase; }
+.notes p { margin: 0; }
+.status { font-family: var(--mono); font-size: .72rem; color: var(--ink-dim); }
+@media (max-width: 640px) {
+  .steps { grid-template-columns: 44px repeat(8, minmax(0, 1fr)); }
+  .steps .knob.small { width: 30px; height: 30px; }
+  .steps .knob.small::after { height: 9px; top: 3px; transform-origin: 50% 12px; }
+  .bgrid { grid-template-columns: repeat(8, minmax(0, 1fr)); row-gap: 18px; }
+  .ctl { width: 60px; }
+  .steps .rl { font-size: .58rem; letter-spacing: .04em; }
+}
+@media (prefers-reduced-motion: reduce) { .tog::after { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>DFAM<small>ZOIA patch 024 · Web Audio port</small></h1>
+    <div class="transport">
+      <button class="t power" id="power" type="button">Start audio</button>
+      <button class="t" id="run" type="button" aria-pressed="false"><span class="led"></span>Run <kbd>space</kbd></button>
+      <button class="t" id="trig" type="button">Trigger <kbd>T</kbd></button>
+      <button class="t" id="adv" type="button">Advance <kbd>A</kbd></button>
+      <button class="t" id="rst" type="button">Restart <kbd>R</kbd></button>
+      <div class="ctl" data-k="tempo" data-label="Tempo"></div>
+    </div>
+  </header>
+
+  <div class="modules">
+    <section class="mod"><h2>VCO 1</h2><div class="row">
+      <div class="ctl" data-k="osc1EgAmt" data-label="EG Amount" data-bi="1"></div>
+      <div class="ctl" data-k="osc1Freq" data-label="Frequency"></div>
+      <div class="ctl" data-t="osc1PitchMod" data-label="Seq Pitch"></div>
+      <div class="ctl" data-t="osc1Square" data-label="Tri / Sq"></div>
+      <div class="ctl" data-k="osc1Level" data-label="Level"></div>
+    </div></section>
+    <section class="mod"><h2>VCO 2</h2><div class="row">
+      <div class="ctl" data-k="osc2EgAmt" data-label="EG Amount" data-bi="1"></div>
+      <div class="ctl" data-k="osc2Freq" data-label="Frequency"></div>
+      <div class="ctl" data-t="osc2PitchMod" data-label="Seq Pitch"></div>
+      <div class="ctl" data-t="osc2Square" data-label="Tri / Sq"></div>
+      <div class="ctl" data-k="osc2Level" data-label="Level"></div>
+      <div class="ctl" data-t="osc2Sync" data-label="Sync (XOR)"></div>
+    </div></section>
+    <section class="mod"><h2>Mod &amp; noise</h2><div class="row">
+      <div class="ctl" data-k="vcoDecay" data-label="VCO Decay"></div>
+      <div class="ctl" data-k="fmAmt" data-label="1→2 FM"></div>
+      <div class="ctl" data-k="noiseLevel" data-label="Noise"></div>
+    </div></section>
+    <section class="mod"><h2>VCF</h2><div class="row">
+      <div class="ctl" data-k="vcfEgAmt" data-label="EG Amount" data-bi="1"></div>
+      <div class="ctl" data-k="vcfCutoff" data-label="Cutoff"></div>
+      <div class="ctl" data-k="vcfRes" data-label="Resonance"></div>
+      <div class="ctl" data-k="noiseVcfMod" data-label="Noise → VCF"></div>
+      <div class="ctl" data-k="vcfDecay" data-label="VCF Decay"></div>
+      <div class="ctl" data-t="vcfHP" data-label="LP / HP"></div>
+    </div></section>
+    <section class="mod"><h2>VCA</h2><div class="row">
+      <div class="ctl" data-t="slowAttack" data-label="Slow Attack"></div>
+      <div class="ctl" data-k="vcaDecay" data-label="VCA Decay"></div>
+      <div class="ctl" data-k="volume" data-label="Volume"></div>
+    </div></section>
+  </div>
+
+  <section class="seq">
+    <h2>8-step sequencer</h2>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section class="seq breaks">
+    <h2>Breaks · restart the 8-step pattern on the step after a lit cell</h2>
+    <div class="bgrid" id="bgrid"></div>
+    <div class="mods" id="mods"></div>
+  </section>
+
+  <section class="notes">
+    <h2>About this port</h2>
+    <p>The DSP runs per sample in an AudioWorklet and follows the patch's 132 modules and 169 cables: two oscillators with triangle/square switches, pitch envelopes scaled by velocity, linear FM from VCO 1 into VCO 2, a bit-XOR "sync", white noise, a state-variable filter with envelope and noise modulation, and a VCA. Knob defaults are the values saved in the patch.</p>
+    <p>Pitch follows ZOIA's scale: 0 is 27.5 Hz and each 0.1 of CV is one octave, so a centred Frequency knob sits at 27.5 Hz. The Breaks row is the patch's 16-step restart sequencer; Modifiers 1–4 light steps 6, 10, 4 and 13. MIDI clock, MIDI note triggering, the external CV jack and the display pixels are not ported.</p>
+    <p class="status" id="status">Audio is off. Press Start audio, then Run.</p>
+  </section>
+</div>
+
+<script>
+// DFAM engine: a per-sample port of the ZOIA "DFAM" patch (024_zoia_DFAM.bin).
+// Signal flow follows the patch's modules and connections; see notes in the page.
+class DFAMEngine {
+  constructor(sr) {
+    this.sr = sr;
+    // Page 0 controls (defaults are the values saved in the patch).
+    this.p = {
+      osc1EgAmt: 0, osc1PitchMod: 1, osc1Freq: 0.5, osc1Square: 0, osc1Level: 1,
+      vcoDecay: 0.5,
+      osc2EgAmt: 0, osc2PitchMod: 1, osc2Freq: 0.5, osc2Square: 0, osc2Level: 0,
+      fmAmt: 0, noiseLevel: 0, osc2Sync: 0,
+      vcfEgAmt: 0, vcfHP: 0, vcfCutoff: 1, vcfRes: 0, noiseVcfMod: 0, vcfDecay: 0.65,
+      volume: 1, slowAttack: 0, vcaDecay: 0.65,
+      tempo: 0.3072,
+    };
+    // Page 1/10: sequencers.
+    this.pitch = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+    this.vel = [1, 0, 0, 0.6836, 0, 0, 0.7508, 0];
+    this.breaks = new Array(16).fill(0); this.breaks[15] = 1;
+    this.modifiers = [0, 0, 0, 0];           // Modifier 1..4 -> Breaks Seq steps 6, 10, 4, 13
+    this.modSteps = [5, 9, 3, 12];
+    this.running = 0;
+    this.idx = -1; this.bIdx = -1; this.restartQueued = false;
+    this.clockPh = 0;
+    this.pitchHold = 0.5; this.velHold = 0;
+    // envelopes: [vco1, vco2, vcf, vca]
+    this.env = [0, 0, 0, 0]; this.envStage = [0, 0, 0, 0]; // 0 idle, 1 attack, 2 decay
+    this.ph1 = 0; this.ph2 = 0;
+    this.sq1 = 0; this.sq2 = 0; this.syncS = 0; this.hpS = 0; // smoothed switches ("fades: on")
+    this.ic1 = 0; this.ic2 = 0; // SVF state
+    this.events = [];           // messages for the UI
+  }
+
+  // ZOIA time knob: 1.33 ms .. 60 s, geometric per quarter of travel.
+  static envTime(v) {
+    const pts = [1.33, 18.7, 283, 4120, 60000];
+    v = Math.min(1, Math.max(0, v)) * 4;
+    const i = Math.min(3, Math.floor(v)), f = v - i;
+    return pts[i] * Math.pow(pts[i + 1] / pts[i], f) / 1000;
+  }
+  // ZOIA VCA level: 0 = -inf, .25 = -12 dB, .5 = -6 dB, .75 = -2.5 dB, 1 = 0 dB.
+  static vcaGain(v) {
+    if (v <= 0) return 0;
+    if (v >= 1) return 1;
+    if (v < 0.25) return v * 4 * 0.2512;
+    const db = [-12, -6, -2.5, 0];
+    const x = (v - 0.25) * 4, i = Math.min(2, Math.floor(x)), f = x - i;
+    return Math.pow(10, (db[i] + (db[i + 1] - db[i]) * f) / 20);
+  }
+  // ZOIA 1V/oct-style CV: 0 -> 27.5 Hz, each 0.1 is an octave.
+  static cvToHz(cv) { return 27.5 * Math.pow(2, 10 * cv); }
+
+  stepsPerSec() { return 40 * this.p.tempo; } // Clock Divider "Tempo", 0..40 Hz
+
+  clock() {
+    // Breaks Seq (16 steps) and the main 8-step seqs share the clock.
+    this.bIdx = (this.bIdx + 1) % 16;
+    if (this.restartQueued) { this.idx = 0; this.restartQueued = false; }
+    else this.idx = (this.idx + 1) % 8;
+    const b = this.bIdx;
+    const mi = this.modSteps.indexOf(b);
+    const high = mi >= 0 ? this.modifiers[mi] : this.breaks[b];
+    if (high > 0.5) this.restartQueued = true; // queue_start: restart on next clock
+    this.events.push({ type: 'step', idx: this.idx, bIdx: this.bIdx });
+    // Gate Detect = (velocity > 0) x gate track, so only steps with velocity fire.
+    if (this.vel[this.idx] > 0) this.trigger();
+  }
+  trigger() {
+    const i = this.idx < 0 ? 0 : this.idx;
+    this.pitchHold = this.pitch[i];   // OSC1/OSC2 Sustain (sample & hold)
+    this.velHold = this.vel[i];       // Velocity Sust (sample & hold)
+    for (let e = 0; e < 4; e++) this.envStage[e] = 1;
+    this.events.push({ type: 'hit', idx: i });
+  }
+  restart() { this.idx = -1; this.bIdx = -1; this.restartQueued = false; this.events.push({ type: 'step', idx: -1, bIdx: -1 }); }
+  advance() { this.clock(); }
+  setRunning(r) { if (r && !this.running) this.clockPh = 1; this.running = r ? 1 : 0; }
+
+  static polyblep(t, dt) {
+    if (t < dt) { t /= dt; return t + t - t * t - 1; }
+    if (t > 1 - dt) { t = (t - 1) / dt; return t * t + t + t + 1; }
+    return 0;
+  }
+
+  process(L, R, n) {
+    const p = this.p, sr = this.sr, inv = 1 / sr;
+    const nyq = sr * 0.45;
+    // per-block coefficients
+    const dVco = DFAMEngine.envTime(p.vcoDecay * 0.975);
+    const dVcf = DFAMEngine.envTime(p.vcfDecay * 0.975);
+    const dVca = DFAMEngine.envTime(p.vcaDecay * 0.975);
+    const k40 = Math.log(100);
+    const decMul = [Math.exp(-k40 / (dVco * sr)), Math.exp(-k40 / (dVco * sr)), Math.exp(-k40 / (dVcf * sr)), Math.exp(-k40 / (dVca * sr))];
+    const fastA = 1 / (0.00133 * sr);
+    const atkInc = [fastA, fastA, fastA, p.slowAttack ? 1 / (0.15 * sr) : fastA];
+    const g1 = DFAMEngine.vcaGain(p.osc1Level * 0.969);
+    const g2 = DFAMEngine.vcaGain(p.osc2Level * 0.969);
+    const gN = DFAMEngine.vcaGain(p.noiseLevel * 0.896);
+    const gFM = DFAMEngine.vcaGain(p.fmAmt);
+    const gVol = DFAMEngine.vcaGain(p.volume);
+    const Q = Math.pow(1000, p.vcfRes), kq = 1 / Q;
+    const sm = 1 - Math.exp(-1 / (0.005 * sr));
+    const clkInc = this.stepsPerSec() * inv;
+    const env = this.env, st = this.envStage;
+
+    for (let s = 0; s < n; s++) {
+      if (this.running) {
+        this.clockPh += clkInc;
+        if (this.clockPh >= 1) { this.clockPh -= Math.floor(this.clockPh); this.clock(); }
+      }
+      for (let e = 0; e < 4; e++) {
+        if (st[e] === 1) { env[e] += atkInc[e]; if (env[e] >= 1) { env[e] = 1; st[e] = 2; } }
+        else if (st[e] === 2) { env[e] *= decMul[e]; if (env[e] < 1e-5) { env[e] = 0; st[e] = 0; } }
+      }
+      const vh = this.velHold;
+      const seqOff = 0.969 * (2 * this.pitchHold - 1);
+
+      // VCO 1
+      const cv1 = 0.969 * (2 * p.osc1Freq - 1) + (p.osc1PitchMod ? seqOff : 0) + env[0] * vh * p.osc1EgAmt * 0.956;
+      const f1 = Math.min(nyq, DFAMEngine.cvToHz(cv1));
+      const dt1 = f1 * inv;
+      this.ph1 += dt1; if (this.ph1 >= 1) this.ph1 -= 1;
+      const tri1 = 1 - 4 * Math.abs(this.ph1 - 0.5);
+      let sqr1 = this.ph1 < 0.5 ? 1 : -1;
+      sqr1 += DFAMEngine.polyblep(this.ph1, dt1) - DFAMEngine.polyblep((this.ph1 + 0.5) % 1, dt1);
+      this.sq1 += (p.osc1Square - this.sq1) * sm;
+      const vco1 = tri1 + (sqr1 - tri1) * this.sq1;
+
+      // VCO 2 with linear (through-zero) FM from VCO 1 via the "FM Amt" VCA
+      const cv2 = 0.969 * (2 * p.osc2Freq - 1) + (p.osc2PitchMod ? seqOff : 0) + env[1] * vh * p.osc2EgAmt * 0.956;
+      const f2b = Math.min(nyq, DFAMEngine.cvToHz(cv2));
+      let f2 = f2b + vco1 * gFM * f2b * 4;
+      if (f2 > nyq) f2 = nyq; else if (f2 < -nyq) f2 = -nyq;
+      const dt2 = f2 * inv;
+      this.ph2 += dt2; this.ph2 -= Math.floor(this.ph2);
+      const tri2 = 1 - 4 * Math.abs(this.ph2 - 0.5);
+      const adt2 = Math.abs(dt2);
+      let sqr2 = this.ph2 < 0.5 ? 1 : -1;
+      sqr2 += DFAMEngine.polyblep(this.ph2, adt2) - DFAMEngine.polyblep((this.ph2 + 0.5) % 1, adt2);
+      this.sq2 += (p.osc2Square - this.sq2) * sm;
+      const vco2 = tri2 + (sqr2 - tri2) * this.sq2;
+
+      // "OSC2 Sync" = Bit Modulator (XOR of VCO2 and VCO1)
+      const a = Math.round(Math.max(-1, Math.min(1, vco2 * 0.896)) * 32767);
+      const b = Math.round(Math.max(-1, Math.min(1, vco1 * 0.898)) * 32767);
+      const xr = (((a ^ b) << 16) >> 16) / 32768;
+      this.syncS += (p.osc2Sync - this.syncS) * sm;
+      const osc2 = vco2 + (xr - vco2) * this.syncS;
+
+      const noise = Math.random() * 2 - 1;
+      const mix = vco1 * g1 + osc2 * g2 + noise * gN;
+
+      // VCF: cutoff + EG + noise CV ("CV Noise Gen" x Noise-VCF Mod)
+      const mod = Math.random() * 0.897 * p.noiseVcfMod;
+      const fcv = p.vcfCutoff + env[2] * vh * (p.vcfEgAmt + mod) + mod;
+      const fc = Math.max(20, Math.min(Math.min(23999, sr * 0.49), DFAMEngine.cvToHz(fcv)));
+      const g = Math.tan(Math.PI * fc * inv);
+      const a1 = 1 / (1 + g * (g + kq)), a2 = g * a1, a3 = g * a2;
+      const v3 = mix - this.ic2;
+      const v1 = a1 * this.ic1 + a2 * v3;
+      const v2 = this.ic2 + a2 * this.ic1 + a3 * v3;
+      this.ic1 = 2 * v1 - this.ic1; this.ic2 = 2 * v2 - this.ic2;
+      const lp = v2, hp = mix - kq * v1 - v2;
+      this.hpS += (p.vcfHP - this.hpS) * sm;
+      const filt = lp + (hp - lp) * this.hpS;
+
+      // VCA (Volume ENV x velocity) then Main Volume
+      let out = filt * DFAMEngine.vcaGain(env[3] * vh) * gVol;
+      if (out > 1) out = 1; else if (out < -1) out = -1;
+      if (out !== out) { out = 0; this.ic1 = 0; this.ic2 = 0; }
+      L[s] = out; R[s] = out;
+    }
+  }
+
+  set(msg) {
+    switch (msg.type) {
+      case 'param': this.p[msg.key] = msg.value; break;
+      case 'pitch': this.pitch[msg.i] = msg.value; break;
+      case 'vel': this.vel[msg.i] = msg.value; break;
+      case 'breaks': this.breaks[msg.i] = msg.value; break;
+      case 'modifier': this.modifiers[msg.i] = msg.value; break;
+      case 'run': this.setRunning(msg.value); break;
+      case 'trigger': this.trigger(); break;
+      case 'advance': this.advance(); break;
+      case 'restart': this.restart(); break;
+    }
+  }
+}
+if (typeof module !== 'undefined') module.exports = DFAMEngine;
+
+</script>
+<script>
+(() => {
+  const E = DFAMEngine;
+  const eng = new E(48000); // mirror of the defaults, used for UI state only
+  const state = { p: { ...eng.p }, pitch: eng.pitch.slice(), vel: eng.vel.slice(), breaks: eng.breaks.slice(), modifiers: eng.modifiers.slice(), running: 0 };
+  let send = () => {};
+  let ctx = null;
+
+  const fmtHz = hz => hz >= 1000 ? (hz / 1000).toFixed(2) + ' kHz' : hz >= 10 ? hz.toFixed(1) + ' Hz' : hz.toFixed(2) + ' Hz';
+  const fmtT = s => s >= 1 ? s.toFixed(2) + ' s' : Math.round(s * 1000) + ' ms';
+  const fmt = {
+    osc1Freq: v => fmtHz(E.cvToHz(0.969 * (2 * v - 1))),
+    osc2Freq: v => fmtHz(E.cvToHz(0.969 * (2 * v - 1))),
+    vcfCutoff: v => fmtHz(Math.min(23999, E.cvToHz(v))),
+    vcfRes: v => 'Q ' + (Math.pow(1000, v) < 10 ? Math.pow(1000, v).toFixed(1) : Math.round(Math.pow(1000, v))),
+    vcoDecay: v => fmtT(E.envTime(v * 0.975)),
+    vcfDecay: v => fmtT(E.envTime(v * 0.975)),
+    vcaDecay: v => fmtT(E.envTime(v * 0.975)),
+    tempo: v => (40 * v).toFixed(1) + ' st/s',
+    osc1Level: v => db(v * 0.969), osc2Level: v => db(v * 0.969), noiseLevel: v => db(v * 0.896), fmAmt: v => db(v), volume: v => db(v),
+  };
+  function db(v) { const g = E.vcaGain(v); return g <= 0 ? '−∞ dB' : (20 * Math.log10(g)).toFixed(1) + ' dB'; }
+  const fmtBi = v => (v >= 0 ? '+' : '') + v.toFixed(2);
+
+  // Rotary knob: drag vertically, wheel, or arrow keys. Bipolar knobs run -1..1.
+  function makeKnob(host, { get, set, bi, small, label, show }) {
+    const k = document.createElement('div');
+    k.className = 'knob' + (small ? ' small' : '');
+    k.tabIndex = 0; k.setAttribute('role', 'slider');
+    k.setAttribute('aria-label', label);
+    const lo = bi ? -1 : 0;
+    k.setAttribute('aria-valuemin', lo); k.setAttribute('aria-valuemax', 1);
+    const out = show ? document.createElement('span') : null;
+    if (out) out.className = 'val';
+    const paint = () => {
+      const v = get(); const n = (v - lo) / (1 - lo);
+      k.style.setProperty('--a', (-135 + 270 * n) + 'deg');
+      k.setAttribute('aria-valuenow', v.toFixed(3));
+      if (out) out.textContent = show(v);
+    };
+    const put = v => { set(Math.min(1, Math.max(lo, v))); paint(); };
+    let y0 = 0, v0 = 0;
+    k.addEventListener('pointerdown', e => { k.setPointerCapture(e.pointerId); y0 = e.clientY; v0 = get(); e.preventDefault(); k.focus(); });
+    k.addEventListener('pointermove', e => { if (!k.hasPointerCapture(e.pointerId)) return; const span = 1 - lo; put(v0 + (y0 - e.clientY) / (e.shiftKey ? 600 : 160) * span); });
+    k.addEventListener('wheel', e => { e.preventDefault(); put(get() - Math.sign(e.deltaY) * 0.01 * (1 - lo)); }, { passive: false });
+    k.addEventListener('keydown', e => {
+      const st = (e.shiftKey ? 0.002 : 0.02) * (1 - lo);
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { put(get() + st); e.preventDefault(); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { put(get() - st); e.preventDefault(); }
+    });
+    k.addEventListener('dblclick', () => put(k._def));
+    k._def = get();
+    host.appendChild(k); if (out) host.appendChild(out);
+    paint();
+    return k;
+  }
+  function makeToggle(host, { get, set, label }) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tog'; b.setAttribute('aria-label', label);
+    b.innerHTML = '<span class="led"></span>';
+    const paint = () => b.setAttribute('aria-pressed', get() ? 'true' : 'false');
+    b.addEventListener('click', () => { set(get() ? 0 : 1); paint(); });
+    host.appendChild(b); paint();
+    return b;
+  }
+
+  document.querySelectorAll('.ctl').forEach(c => {
+    const lab = document.createElement('span'); lab.className = 'lab'; lab.textContent = c.dataset.label; c.appendChild(lab);
+    if (c.dataset.k) {
+      const key = c.dataset.k, bi = !!c.dataset.bi;
+      makeKnob(c, { label: c.dataset.label, bi, get: () => state.p[key], set: v => { state.p[key] = v; send({ type: 'param', key, value: v }); }, show: fmt[key] || (bi ? fmtBi : v => v.toFixed(2)) });
+    } else {
+      const key = c.dataset.t;
+      makeToggle(c, { label: c.dataset.label, get: () => state.p[key], set: v => { state.p[key] = v; send({ type: 'param', key, value: v }); } });
+      const v = document.createElement('span'); v.className = 'val'; v.textContent = ' '; c.appendChild(v);
+    }
+  });
+
+  // Sequencer grid
+  const steps = document.getElementById('steps');
+  const leds = [];
+  const cell = (cls, txt) => { const d = document.createElement('div'); if (cls) d.className = cls; if (txt != null) d.textContent = txt; steps.appendChild(d); return d; };
+  cell('rl', 'Step'); for (let i = 0; i < 8; i++) cell('num', i + 1);
+  cell('rl', ''); for (let i = 0; i < 8; i++) leds.push(cell('stepled'));
+  cell('rl', 'Pitch');
+  for (let i = 0; i < 8; i++) { const d = cell(''); makeKnob(d, { small: true, label: 'Pitch step ' + (i + 1), get: () => state.pitch[i], set: v => { state.pitch[i] = v; send({ type: 'pitch', i, value: v }); } }); }
+  cell('rl', 'Velocity');
+  for (let i = 0; i < 8; i++) { const d = cell(''); makeKnob(d, { small: true, label: 'Velocity step ' + (i + 1), get: () => state.vel[i], set: v => { state.vel[i] = v; send({ type: 'vel', i, value: v }); } }); }
+
+  // Breaks row + modifiers
+  const bgrid = document.getElementById('bgrid');
+  const modSteps = [5, 9, 3, 12];
+  const bcells = [];
+  for (let i = 0; i < 16; i++) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'stepcell'; b.textContent = i + 1;
+    const m = modSteps.indexOf(i);
+    if (m >= 0) { b.classList.add('mod'); b.dataset.m = m + 1; b.setAttribute('aria-label', 'Break step ' + (i + 1) + ', set by Modifier ' + (m + 1)); }
+    else b.setAttribute('aria-label', 'Break step ' + (i + 1));
+    b.addEventListener('click', () => {
+      if (m >= 0) { toggleMod(m); return; }
+      state.breaks[i] = state.breaks[i] ? 0 : 1; send({ type: 'breaks', i, value: state.breaks[i] }); paintBreaks();
+    });
+    bgrid.appendChild(b); bcells.push(b);
+  }
+  const mods = document.getElementById('mods'); const modBtns = [];
+  for (let m = 0; m < 4; m++) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 't'; b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = '<span class="led"></span>Modifier ' + (m + 1) + ' <kbd>' + (m + 1) + '</kbd>';
+    b.addEventListener('click', () => toggleMod(m));
+    mods.appendChild(b); modBtns.push(b);
+  }
+  function toggleMod(m) { state.modifiers[m] = state.modifiers[m] ? 0 : 1; send({ type: 'modifier', i: m, value: state.modifiers[m] }); paintBreaks(); }
+  function paintBreaks() {
+    bcells.forEach((b, i) => { const m = modSteps.indexOf(i); const on = m >= 0 ? state.modifiers[m] : state.breaks[i]; b.classList.toggle('set', !!on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    modBtns.forEach((b, m) => b.setAttribute('aria-pressed', state.modifiers[m] ? 'true' : 'false'));
+  }
+  paintBreaks();
+
+  function onEvents(evs) {
+    for (const ev of evs) {
+      if (ev.type === 'step') {
+        leds.forEach((l, i) => l.classList.toggle('on', i === ev.idx));
+        bcells.forEach((b, i) => b.classList.toggle('now', i === ev.bIdx));
+      }
+    }
+  }
+
+  // Audio
+  const status = document.getElementById('status');
+  const power = document.getElementById('power');
+  function pushAll() {
+    for (const [key, value] of Object.entries(state.p)) send({ type: 'param', key, value });
+    state.pitch.forEach((value, i) => send({ type: 'pitch', i, value }));
+    state.vel.forEach((value, i) => send({ type: 'vel', i, value }));
+    state.breaks.forEach((value, i) => send({ type: 'breaks', i, value }));
+    state.modifiers.forEach((value, i) => send({ type: 'modifier', i, value }));
+    send({ type: 'run', value: state.running });
+  }
+  async function start() {
+    if (ctx) { if (ctx.state === 'running') { await ctx.suspend(); power.textContent = 'Resume audio'; power.classList.remove('on'); status.textContent = 'Audio paused.'; } else { await ctx.resume(); power.textContent = 'Pause audio'; power.classList.add('on'); status.textContent = 'Audio running at ' + ctx.sampleRate + ' Hz.'; } return; }
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let mode = 'AudioWorklet';
+    try {
+      const src = DFAMEngine.toString() + `
+        class P extends AudioWorkletProcessor {
+          constructor() { super(); this.e = new DFAMEngine(sampleRate); this.port.onmessage = m => this.e.set(m.data); }
+          process(i, o) { const ch = o[0]; this.e.process(ch[0], ch[1] || ch[0], ch[0].length);
+            if (this.e.events.length) { this.port.postMessage(this.e.events); this.e.events = []; } return true; }
+        }
+        registerProcessor('dfam', P);`;
+      const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+      await ctx.audioWorklet.addModule(url);
+      const node = new AudioWorkletNode(ctx, 'dfam', { numberOfInputs: 0, outputChannelCount: [2] });
+      node.port.onmessage = m => onEvents(m.data);
+      send = msg => node.port.postMessage(msg);
+      node.connect(ctx.destination);
+    } catch (err) {
+      mode = 'ScriptProcessor';
+      const e = new DFAMEngine(ctx.sampleRate);
+      const sp = ctx.createScriptProcessor(1024, 0, 2);
+      sp.onaudioprocess = ev => { const ob = ev.outputBuffer; e.process(ob.getChannelData(0), ob.getChannelData(1), ob.length); if (e.events.length) { const evs = e.events; e.events = []; onEvents(evs); } };
+      send = msg => e.set(msg);
+      sp.connect(ctx.destination);
+    }
+    pushAll();
+    await ctx.resume();
+    power.textContent = 'Pause audio'; power.classList.add('on');
+    status.textContent = 'Audio running at ' + ctx.sampleRate + ' Hz (' + mode + ').';
+  }
+  power.addEventListener('click', start);
+
+  const runBtn = document.getElementById('run');
+  const setRun = async v => { if (!ctx) await start(); state.running = v; runBtn.setAttribute('aria-pressed', v ? 'true' : 'false'); send({ type: 'run', value: v }); };
+  runBtn.addEventListener('click', () => setRun(state.running ? 0 : 1));
+  const hit = async t => { if (!ctx) await start(); send({ type: t }); };
+  document.getElementById('trig').addEventListener('click', () => hit('trigger'));
+  document.getElementById('adv').addEventListener('click', () => hit('advance'));
+  document.getElementById('rst').addEventListener('click', () => hit('restart'));
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('.knob')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === ' ') { if (e.target.tagName === 'BUTTON') return; e.preventDefault(); setRun(state.running ? 0 : 1); }
+    else if (e.key === 't' || e.key === 'T') hit('trigger');
+    else if (e.key === 'a' || e.key === 'A') hit('advance');
+    else if (e.key === 'r' || e.key === 'R') hit('restart');
+    else if ('1234'.includes(e.key)) toggleMod(+e.key - 1);
+  });
+})();
+</script>
+
+</body>
+</html>
